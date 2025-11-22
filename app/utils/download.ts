@@ -1,41 +1,50 @@
 import RNFS from "react-native-fs";
 import { unzip } from "react-native-zip-archive";
 
-// https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip
-// https://alphacephei.com/vosk/models/vosk-model-small-cn-0.22.zip
 export const MODEL_ZIP_URL_CN = "https://alphacephei.com/vosk/models/vosk-model-small-cn-0.22.zip";
 export const MODEL_ZIP_URL_EN = "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip";
 
-export const LOCAL_ZIP_PATH_CN = `${RNFS.DocumentDirectoryPath}/vosk-cn.zip`;
-export const LOCAL_ZIP_PATH_EN = `${RNFS.DocumentDirectoryPath}/vosk-en.zip`;
 
-export async function downloadModel(downloadUrl: string, localZipPath: string, onProgress) {
-  console.log('smile:🚀 ~ f:download m:downloadModel l:13-> downloadUrl:', downloadUrl);
-  const modelDir = localZipPath.replace('.zip', '');
-  const modelDirExists = await RNFS.exists(modelDir);
+export async function downloadModel(downloadUrl: string, onProgress: (percent: number) => void) {
+
+  const modelName = downloadUrl.split('/').pop()!.replace('.zip', '')
+  const modelDownDir = `${RNFS.DocumentDirectoryPath}/${modelName}`;
+  const modelDirExists = await RNFS.exists(modelDownDir);
   if (modelDirExists) {
-    // await RNFS.unlink(modelDir);
+    const files = await RNFS.readDir(modelDownDir);
+    if (files.length > 0) {
+      console.log('Model already exists, skipping download.',  files[0].path);
+      return {
+        modelDir: files[0].path, // 解压后的模型地址
+      };
+    }
   }
+
+  const downloadFilePath = `${RNFS.DocumentDirectoryPath}/${modelName}.zip`;
 
   const promise =  RNFS.downloadFile({
     fromUrl: downloadUrl,
-    toFile: localZipPath,
+    toFile: downloadFilePath,
+    begin: () => {
+      console.log('smile:🚀 ~ f:download m:begin l:24->', '开始下载');
+    },
     progress: ({ contentLength, bytesWritten }) => {
-      console.log('smile:🚀 ~ f:download m:progress l:19-> percent:', bytesWritten, contentLength);
       const percent = bytesWritten / contentLength;
       onProgress?.(percent);
     }
   }).promise
 
-  const res = await promise;
-  console.log('smile:🚀 ~ f:download m:downloadModel l:30-> res:', res);
-
-
+  await promise;
 
   // 解压模型文件
-  await unzip(localZipPath, modelDir);
+  await unzip(downloadFilePath, modelDownDir);
+
+  // 清理下载的zip文件
+  await RNFS.unlink(downloadFilePath);
+
+  const files = await RNFS.readDir(modelDownDir);
 
   return {
-    modelDir,
+    modelDir: files[0]?.path,
   };
 }

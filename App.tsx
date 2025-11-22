@@ -5,21 +5,21 @@
  * @format
  */
 
-import { Button, StatusBar, StyleSheet, useColorScheme, View } from 'react-native';
-import {
-  SafeAreaProvider,
-  useSafeAreaInsets,
+import { Button, StatusBar, StyleSheet, useColorScheme, View,Text } from 'react-native';
+import { 
+  SafeAreaProvider ,  
 } from 'react-native-safe-area-context';
 import ReaderHighlighter from './ReaderHighlighter';
 import { useEffect, useState } from 'react';
 import {
   downloadModel,
-  LOCAL_ZIP_PATH_CN,
   MODEL_ZIP_URL_CN,
 } from './app/utils/download.ts';
 import { loadVoskModel } from './app/utils/vosk.ts';
-import RNFS from 'react-native-fs';
-
+import { longFullText } from './testData.ts'
+import DocumentPicker from 'react-native-document-picker';
+import { readDocx } from './app/utils/docx';
+ 
 function App() {
   const isDarkMode = useColorScheme() === 'dark';
 
@@ -32,21 +32,13 @@ function App() {
 }
 
 function AppContent() {
-  const safeAreaInsets = useSafeAreaInsets();
 
-  const [fullText, setFullText] = useState('大家好，欢迎来到我们的应用。今天，我们将一起探索一些非常有趣的功能。请确保你的设备麦克风已经开启，以便我们能够进行语音交互。接下来，你只需要按照提示操作，就能轻松体验完整的功能。希望你喜欢这次的体验，也希望你在使用过程中发现更多有趣的细节。感谢你的参与，让我们开始吧');
+  const [fullText, setFullText] = useState(longFullText);
   const [recognizedText, setRecognizedText] = useState('');
 
   useEffect(() => {
     (async () => {
       try {
-        // const { modelDir } = await downloadModel(
-        //   MODEL_ZIP_URL_CN,
-        //   LOCAL_ZIP_PATH_CN,
-        //   (percent) => {
-        //     console.log('smile:🚀 ~ f:AppContent ~ percent:', percent);
-        //   },
-        // );
       } catch (e) {
         console.error(e);
       } finally {
@@ -56,23 +48,78 @@ function AppContent() {
     })()
   }, []);
 
+  const [isDownloading, setIsDownloading] = useState(false)
+  const [downloadPercent, setDownloadPercent] = useState<number>(0);
+  const [isLoadModel, setIsLoadModel] = useState(false)
+
   async function startRecord() {
-    const modelDir = LOCAL_ZIP_PATH_CN.replaceAll('.zip', '');
+    setIsDownloading(true);
+    setDownloadPercent(0);
+    setIsLoadModel(false);
+
+    let modelDir = ''
+    try {
+      console.log('smile:🚀 ~ f:App m:startRecord l:62->', '开始下载模型');
+      // 下载模型
+      const res = await downloadModel(MODEL_ZIP_URL_CN, (percent) => {
+        setDownloadPercent(percent);
+      });
+      modelDir = res.modelDir
+    } catch (e) {
+      console.error(e);
+      return
+    } finally {
+      setIsDownloading(false);
+      setDownloadPercent(0);
+    }
+
+    if (!modelDir) return
 
     console.log('smile:🚀 ~ f:App m: l:50-> modelDir:', modelDir);
     // 加载模型
     try {
-      const recognizer = await loadVoskModel(modelDir, (res) => {
+      await loadVoskModel(modelDir, (res) => {
         setRecognizedText(res);
       });
+      setIsLoadModel(true)
+      // 加载模型成功
     } catch (e) {
       console.error(e);
+      setIsLoadModel(false)
     }
   }
 
+  const handleImportWord = async () => {
+    try {
+      const res = await DocumentPicker.pick({
+        type: [
+          DocumentPicker.types.docx, 
+        ],
+      });
+
+      if (res && res[0]) {
+        const fileUri = res[0].uri;
+        const text = await readDocx(fileUri);
+        console.log('smile:🚀 ~ f:App m:handleImportWord l:106->', text);
+        setFullText(text);
+      }
+    } catch (err) {
+      if (DocumentPicker.isCancel(err)) {
+        // User cancelled the picker
+      } else {
+        console.error('Error picking document:', err);
+      }
+    }
+  };
+
   return (
     <View style={styles.container}>
-      <Button title={'开始识别'} onPress={startRecord}></Button>
+      <View style={styles.buttonContainer}>
+        <Button title={isDownloading ? `正在下载模型... ${((downloadPercent ?? 0) * 100).toFixed(2)}%` : '开始识别'} disabled={isDownloading} onPress={startRecord} />
+        <Button title="导入 Word" onPress={handleImportWord} />
+      </View>
+      <Text>模型加载状态：{isLoadModel ? '成功' : '未加载'}</Text>
+      <Text>语音识别结果: {recognizedText}</Text>
       <ReaderHighlighter fullText={fullText} recognizedText={recognizedText} />
     </View>
   );
@@ -82,6 +129,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingTop: 64,
+  },
+  buttonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
   },
 });
 
