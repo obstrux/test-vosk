@@ -76,7 +76,7 @@ function AppContent() {
     if (!modelDir) return
 
     console.log('smile:🚀 ~ f:App m: l:50-> modelDir:', modelDir);
-    // 加载模型
+    // 加载模型 123123
     try {
       await loadVoskModel(modelDir, (res) => {
         setRecognizedText(res);
