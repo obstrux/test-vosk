@@ -1,4 +1,4 @@
-package com.reactnativeapp
+package com.test.yw.app
 
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
